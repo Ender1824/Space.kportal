@@ -146,58 +146,14 @@
 
     <section id="discoveries">
       <h2>Latest Discoveries</h2>
-      <p class="lead">Hand‑picked breakthroughs across astronomy and space science. (Replace with your own content feed.)</p>
-      <div class="grid" role="list">
-        <!-- Card 1 -->
-        <article class="card" role="listitem">
-          <div class="thumb">
-            <img decoding="async" loading="lazy" src="https://images.unsplash.com/photo-1473929737295-2c4bcfa0c851?q=80&w=1600&auto=format&fit=crop" alt="Spiral galaxy with bright core" />
-          </div>
-          <div class="meta"><span class="chip">Extragalactic</span><span>·</span><span>Deep field</span></div>
-          <h3>Mapping dark matter with galaxy lensing</h3>
-          <p>Gravitational lensing measurements trace the invisible scaffolding shaping cosmic structure.</p>
-        </article>
-        <!-- Card 2 -->
-        <article class="card" role="listitem">
-          <div class="thumb">
-            <img decoding="async" loading="lazy" src="https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=1600&auto=format&fit=crop" alt="Milky Way rising over desert" />
-          </div>
-          <div class="meta"><span class="chip">Cosmology</span><span>·</span><span>Background</span></div>
-          <h3>Sharper constraints on the early universe</h3>
-          <p>Sub‑percent precision on inflationary models arrives via next‑gen background surveys.</p>
-        </article>
-        <!-- Card 3 -->
-        <article class="card" role="listitem">
-          <div class="thumb">
-            <img decoding="async" loading="lazy" src="https://images.unsplash.com/photo-1454789548928-9efd52dc4031?q=80&w=1600&auto=format&fit=crop" alt="Moon surface with Earth on horizon" />
-          </div>
-          <div class="meta"><span class="chip">Planetary</span><span>·</span><span>Lunar</span></div>
-          <h3>Water locked in shadowed craters</h3>
-          <p>Infrared spectroscopy reveals persistent ice near the lunar south pole — vital for future bases.</p>
-        </article>
-      </div>
+      <p class="lead">Live from NASA's Astronomy Picture of the Day (APOD). (Auto‑updates on load.)</p>
+      <div id="apod-grid" class="grid" role="list" aria-live="polite"></div>
     </section>
 
     <section id="missions">
-      <h2>Upcoming Missions</h2>
-      <p class="lead">A quick look at the next launches to watch. (Swap in a live API when ready.)</p>
-      <div class="grid" role="list">
-        <article class="card" role="listitem">
-          <div class="meta"><span class="chip">2026</span><span>·</span><span>LEO</span></div>
-          <h3>Aurora‑X Space Telescope</h3>
-          <p>High‑throughput UV optics to probe star‑forming regions and exoplanet atmospheres.</p>
-        </article>
-        <article class="card" role="listitem">
-          <div class="meta"><span class="chip">2027</span><span>·</span><span>Lunar</span></div>
-          <h3>Artemis Hab Demo</h3>
-          <p>Autonomous habitat module test for sustained human presence across the Moon’s south pole.</p>
-        </article>
-        <article class="card" role="listitem">
-          <div class="meta"><span class="chip">2028</span><span>·</span><span>Deep Space</span></div>
-          <h3>Comet Sample Return</h3>
-          <p>Fly‑through capture mechanism returns pristine material from a carbon‑rich comet.</p>
-        </article>
-      </div>
+      <h2>Upcoming Launches</h2>
+      <p class="lead">Powered by Launch Library 2 (The Space Devs). Times are shown in your local timezone.</p>
+      <div id="launch-grid" class="grid" role="list" aria-live="polite"></div>
     </section>
 
     <section id="gallery">
@@ -324,6 +280,72 @@
         window.addEventListener('pointerdown', e => { sparkle(e.clientX, e.clientY); });
       }
     })();
+      // === Live content loaders ===
+    async function loadAPOD(count = 6){
+      const grid = document.getElementById('apod-grid');
+      if (!grid) return;
+      // Use NASA DEMO_KEY (low quota). Replace with your own key from api.nasa.gov for production.
+      const url = 'https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&thumbs=true&count=' + count;
+      try {
+        const res = await fetch(url);
+        const items = await res.json();
+        grid.innerHTML = items.map(toAPODCard).join('');
+      } catch (e){
+        grid.innerHTML = `<p class="lead">Couldn\'t load APOD right now. Try again or add your own API key.</p>`
+      }
+    }
+
+    function toAPODCard(item){
+      const mediaUrl = item.media_type === 'video' ? (item.thumbnail_url || '') : item.url;
+      const safeAlt = (item.title || 'APOD').replace(/["<>]/g,'');
+      const subtitle = `${item.date || ''}`;
+      const link = item.media_type === 'video' ? item.url : (item.hdurl || item.url);
+      return `
+      <article class="card" role="listitem">
+        <a class="thumb" href="${link}" target="_blank" rel="noopener">
+          ${mediaUrl ? `<img decoding="async" loading="lazy" src="${mediaUrl}" alt="${safeAlt}">` : ''}
+        </a>
+        <div class="meta"><span class="chip">${item.media_type === 'video' ? 'Video' : 'Image'}</span><span>·</span><span>${subtitle}</span></div>
+        <h3>${item.title || 'Astronomy Picture of the Day'}</h3>
+        <p>${(item.explanation || '').split(' ').slice(0,26).join(' ')}&hellip;</p>
+      </article>`
+    }
+
+    async function loadLaunches(limit = 6){
+      const grid = document.getElementById('launch-grid');
+      if (!grid) return;
+      const url = 'https://ll.thespacedevs.com/2.0.0/launch/upcoming/?limit=' + limit + '&mode=list';
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const launches = (data.results || []).slice(0, limit);
+        grid.innerHTML = launches.map(toLaunchCard).join('');
+      } catch (e){
+        grid.innerHTML = `<p class="lead">Couldn\'t load launch data. The public API may be rate‑limited; try again later.</p>`
+      }
+    }
+
+    function toLaunchCard(l){
+      const net = l.net ? new Date(l.net) : null; // NET = No Earlier Than
+      const when = net ? net.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' }) : 'TBD';
+      const loc = (l.pad && l.pad.name) ? l.pad.name : (l.pad && l.pad.location && l.pad.location.name) ? l.pad.location.name : 'Launch site';
+      const img = (l.image) ? `<div class="thumb"><img decoding="async" loading="lazy" src="${l.image}" alt="${l.name}"></div>` : '';
+      const mission = l.mission ? l.mission.name : (l.launch_service_provider ? l.launch_service_provider.name : 'Mission');
+      const statusChip = `<span class="chip">${l.status ? l.status.name : 'Planned'}</span>`;
+      return `
+      <article class="card" role="listitem">
+        ${img}
+        <div class="meta">${statusChip}<span>·</span><span>${when}</span></div>
+        <h3>${l.name}</h3>
+        <p>${mission} · ${loc}</p>
+      </article>`
+    }
+
+    // Kick off loads after initial paint
+    window.addEventListener('DOMContentLoaded', () => {
+      loadAPOD(6);
+      loadLaunches(6);
+    });
   </script>
 </body>
 </html>
